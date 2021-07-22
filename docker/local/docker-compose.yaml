@@ -1,0 +1,21 @@
+version: "3.9"
+
+x-logging: &x-logging
+  options:
+    max-size: 1000k
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./docker/deploy/app/Dockerfile
+    command: python manage.py runserver 0.0.0.0:${APP_HOST_PORT}
+    init: true
+    tty: true
+    working_dir: ${APP_SRC}
+    user: ${UID}:${UID}
+    logging: *x-logging
+    volumes:
+      - ./env/infra-configuration.local.env:/env/infra-configuration.env:ro
+    ports:
+    - ${APP_HOST_PORT}:${APP_CONTAINER_PORT}
