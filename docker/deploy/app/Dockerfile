@@ -13,7 +13,7 @@ ARG PORT
 
 WORKDIR ${APP_SRC}
 
-COPY requirements.txt ${APP_SRC}/
+COPY requirements/deploy/requirements.txt ${APP_SRC}/
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && rm -rf /var/lib/apt/lists/*
@@ -21,7 +21,7 @@ RUN apt-get update && rm -rf /var/lib/apt/lists/*
 CMD exec gunicorn --bind 0.0.0.0:$PORT\
     project.wsgi:application
 
-COPY ./app ${APP_SRC}/
+COPY ./staticsite ${APP_SRC}/
 COPY ./env /env
 
 ### collect static files ###
