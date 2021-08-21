@@ -1,4 +1,9 @@
 .venv/*
 env/*
-memo.md
+
+.python-version
+.vscode
 .DS_Store
+
+__pycache__
+*/*.pyc
