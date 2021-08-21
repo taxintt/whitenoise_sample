@@ -11,10 +11,26 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
 from pathlib import Path
+import pathlib
 import os
+import re
+
+from os.path import join, dirname
+
+from django.utils.translation import override
+from dotenv import load_dotenv
+
+dotenv_path = join(dirname(__file__), '.env')
+
+def _load_env():
+    secret_filenames = os.environ['APP_ENVFILE']
+    for filename in secret_filenames.split(':'):
+        load_dotenv(dotenv_path=filename, override=False)
+
+_load_env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,20 +41,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = []
-
-
-# AWS
-AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
-AWS_S3_OBJECT_PARAMETERS = {
-    'CacheControl': 'max-age=3600', 
-}
-AWS_LOCATION = 'media'
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-MEDIA_URL = "https://%s/%s/" % (AWS_S3_CUSTOM_DOMAIN, AWS_LOCATION)
+ALLOWED_HOSTS = ['127.0.0.1','0.0.0.0','localhost']
 
 
 # Application definition
@@ -49,7 +52,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'blog.apps.BlogConfig',
+    'blog',
     'storages'
 ]
 
@@ -88,11 +91,14 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': {}
 }
 
 
@@ -129,14 +135,75 @@ USE_L10N = True
 USE_TZ = True
 
 
+# AWS
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_REGION = 'ap-northeast-1'
+AWS_S3_CUSTOM_DOMAIN = '%s.s3.%s.amazonaws.com' % (AWS_STORAGE_BUCKET_NAME, AWS_REGION)
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=3600', 
+}
+AWS_LOCATION = 'media'
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+MEDIA_URL = "https://%s/%s/" % (AWS_S3_CUSTOM_DOMAIN, AWS_LOCATION)
+
+app_root_dir = Path(os.environ["APP_SRC"])
+MEDIA_ROOT = app_root_dir / "media"
+
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 # STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-STATIC_URL = '/static/'
 
+
+# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = app_root_dir / "static"
+# STATIC_URL = 'https://%s/%s/' % (AWS_S3_CUSTOM_DOMAIN, AWS_LOCATION)
+
+STATIC_URL = '/static/'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# whitenoise
+WHITENOISE_AUTHREFRESH = True
+
+webroot_file_cache_control = "max-age=3600, public, stale-while-revalidate=86400"
+
+immutable_filename_regex = re.compile(r"^chunk-[0-9a-f]{8}([-_.].*)?\.(js|css)$")
+immutable_file_cache_control = "public, max-age=315360000, immutable"  # WhiteNoiseと同じ
+
+
+def has_immutable_cache_control_directive(headers):
+    return "immutable" in headers.get("Cache-Control", "")
+
+
+def seems_immutable_file(path):
+    return immutable_filename_regex.match(path.name)
+
+
+def whitenoise_override_headers(headers, path, url):
+    """一部の静的ファイルのCache-Controlを調整します
+    DEBUG=False時にはDjango起動時にまとめて判定されます（リクエスト時にではない）
+    """
+
+    is_immutable = has_immutable_cache_control_directive(headers)
+    if is_immutable:
+        return
+
+    path = pathlib.Path(path)
+
+    # is_webroot_file = path.is_relative_to(WHITENOISE_ROOT)
+    # if is_webroot_file:
+    #     headers["Cache-Control"] = webroot_file_cache_control
+    #     return
+
+    if seems_immutable_file(path):
+        headers["Cache-Control"] = immutable_file_cache_control
+        return
+
+    return
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
