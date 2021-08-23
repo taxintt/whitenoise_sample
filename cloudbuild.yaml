@@ -36,7 +36,7 @@ steps:
       - --cache=${_KANIKO_CACHE}
       - --cache-ttl=${_KANIKO_CACHE_TTL}
       - --context=/workspace # by default
-      - --dockerfile=docker/deploy/containers/app/Dockerfile
+      - --dockerfile=docker/deploy/app/Dockerfile
       # destinationを追加すれば一つのrepoのbuildに対して複数のDocker Imageを生成できる
       - --destination=gcr.io/ornate-acronym-266714/vq/v1/app-static:${TAG_NAME}
       - --destination=gcr.io/ornate-acronym-266714/vq/v1/app-static:latest
