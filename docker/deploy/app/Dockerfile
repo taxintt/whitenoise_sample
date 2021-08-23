@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && rm -rf /var/lib/apt/lists/*
 
-CMD exec gunicorn --bind 0.0.0.0:$PORT\
-    project.wsgi:application
-
 COPY ./staticsite ${APP_SRC}/
 COPY ./env ${APP_SRC}/
+
+CMD exec gunicorn --bind 0.0.0.0:$PORT\
+    project.wsgi:application
 
 ### collect static files ###
 FROM app-base AS staticfiles
