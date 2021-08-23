@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && rm -rf /var/lib/apt/lists/*
 
-COPY ./staticsite ${APP_SRC}/
-COPY ./env ${APP_SRC}/
+COPY staticsite ${APP_SRC}/
+COPY env ${APP_SRC}/
 
 CMD exec gunicorn --bind 0.0.0.0:$PORT\
     project.wsgi:application
