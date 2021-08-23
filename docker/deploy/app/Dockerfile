@@ -22,7 +22,7 @@ CMD exec gunicorn --bind 0.0.0.0:$PORT\
     project.wsgi:application
 
 COPY ./staticsite ${APP_SRC}/
-COPY ./env /env
+COPY ./env ${APP_SRC}/
 
 ### collect static files ###
 FROM app-base AS staticfiles
