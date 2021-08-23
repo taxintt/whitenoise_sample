@@ -1,0 +1,92 @@
+steps:
+  # jqとかcurlとか細かいものが入ったイメージ
+  # - id: BuildCloudBuilderCustomImages
+  #   name: "gcr.io/kaniko-project/executor"
+  #   args:
+  #     - --cache=true
+  #     - --cache-ttl=${_KANIKO_CACHE_TTL}
+  #     - --context=/workspace # by default
+  #     - --dockerfile=docker/deploy/containers/cloud-builder/custom/Dockerfile
+  #     # destinationを追加すれば一つのrepoのbuildに対して複数のDocker Imageを生成できる
+  #     - --destination=gcr.io/ornate-acronym-266714/vq/v1/cloud-builder/custom:${TAG_NAME}
+  #     - --destination=gcr.io/ornate-acronym-266714/vq/v1/cloud-builder/custom:latest
+  #   waitFor: ["-"] # no dependency
+
+  - id: AddSSHKeyScan
+    name: "gcr.io/cloud-builders/git"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -eu -o pipefail
+        cat <<EOF >/root/.ssh/config
+        Hostname github.com
+        IdentityFile /root/.ssh/id_github
+        EOF
+        ssh-keyscan -t rsa github.com > /root/.ssh/known_hosts
+    volumes:
+      - name: "ssh"
+        path: /root/.ssh
+    waitFor: ["-"] # no dependency
+
+  - id: BuildAppImages
+    # see kaniko https://cloud.google.com/cloud-build/docs/kaniko-cache?hl=ja
+    name: "gcr.io/kaniko-project/executor"
+    args:
+      - --cache=${_KANIKO_CACHE}
+      - --cache-ttl=${_KANIKO_CACHE_TTL}
+      - --context=/workspace # by default
+      - --dockerfile=docker/deploy/containers/app/Dockerfile
+      # destinationを追加すれば一つのrepoのbuildに対して複数のDocker Imageを生成できる
+      - --destination=gcr.io/ornate-acronym-266714/vq/v1/app-static:${TAG_NAME}
+      - --destination=gcr.io/ornate-acronym-266714/vq/v1/app-static:latest
+      - --build-arg=STAGE=dev
+      - --build-arg=PORT=8080
+    volumes:
+      - name: "ssh"
+        path: /root/.ssh
+    waitFor:
+      - AddSSHKeyScan
+
+  - id: DeployCloudRunDefaultNoTraffic
+    name: ${_CLOUD_BUILDER_STANDARD_CLOUDSDK_IMAGE}
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -eu -o pipefail
+        export CLOUD_RUN_TAG_NAME="${TAG_NAME}"
+        echo "[Debug] $$CLOUD_RUN_TAG_NAME"; \
+        gcloud beta run deploy app-static \
+          --project=ornate-acronym-266714 \
+          --image=gcr.io/ornate-acronym-266714/vq/v1/app-static:latest \
+          --platform=managed \
+          --region=us-central1 \
+          --revision-suffix=$$CLOUD_RUN_TAG_NAME \
+          --no-traffic \
+          --allow-unauthenticated \
+          --memory=1Gi \
+          --cpu=2 \
+          --concurrency=25 \
+          --min-instances=default \
+          --timeout=30 \
+          --set-env-vars="APP_ENVFILE=/env/app-runtime.env/env/infra-configuration.env:/env/infra-shared-configuration.env" \
+          --labels stage=dev,service-group=vis-asq
+
+        export tags="$$CLOUD_RUN_TAG_NAME=app-static-$$CLOUD_RUN_TAG_NAME,ready-dev=app-static-$$CLOUD_RUN_TAG_NAME"
+        gcloud beta run services update-traffic ${_GLOBAL_SERVICE_NAME}-${_APP_DEFAULT_SERVER_NAME} \
+          --project=ornate-acronym-266714 \
+          --platform=managed \
+          --region=us-central1 \
+          --update-tags $$tags
+    waitFor:
+      - BuildAppImages
+
+substitutions:
+  _CLOUD_BUILDER_STANDARD_CLOUDSDK_IMAGE: gcr.io/google.com/cloudsdktool/cloud-sdk:335.0.0-slim
+  _KANIKO_CACHE_TTL: 48h
+
+logsBucket: ${_CLOUDBUILD_LOGS_BUCKET}
+options:
+  machineType: "N1_HIGHCPU_8"
+  substitutionOption: MUST_MATCH
