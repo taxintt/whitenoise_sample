@@ -12,9 +12,10 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+from os.path import join, dirname
 
-import init_env
-import staticfiles
+# from staticfiles import *
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent
@@ -22,6 +23,15 @@ BASE_DIR = Path(__file__).resolve().parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
+
+dotenv_path = join(dirname(__file__), '.env')
+
+def _load_env():
+    secret_filenames = os.environ['APP_ENVFILE']
+    for filename in secret_filenames.split(':'):
+        load_dotenv(dotenv_path=filename, override=False)
+
+_load_env()
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
